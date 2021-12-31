@@ -1,1 +1,1 @@
-from linop import *
+from .linop import *
