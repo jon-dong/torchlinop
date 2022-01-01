@@ -1,4 +1,4 @@
-from base import BaseLinOp
+from .base import BaseLinOp
 import numpy as np
 
 
