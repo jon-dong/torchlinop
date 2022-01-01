@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from .base import BaseLinOp
 
 
@@ -16,17 +15,16 @@ class Matrix(BaseLinOp):
         return self.H.T.conj() @ x
 
 class Multiplication(BaseLinOp):
-    """coefs is a vector for element-wise multiplication"""
-    def __init__(self, coefs):
-        self.coefs = coefs
-        self.in_size = coefs.shape[0]
-        self.out_size = coefs.shape[0]
+    def __init__(self, factor):
+        self.factor = factor
+        self.in_size = factor.shape[0]
+        self.out_size = factor.shape[0]
 
     def apply(self, x):
-        return self.coefs * x
+        return self.factor * x
 
     def applyAdjoint(self, x):
-        return self.coefs.conj() * x
+        return self.factor.conj() * x
     
 class Conv(BaseLinOp):
     """Convolution operator, computed using FFT"""
@@ -96,20 +94,7 @@ class Id(BaseLinOp):
     
     def applyAdjoint(self, x):
         return x
-    
-class Constant(BaseLinOp):
-    """WARNING: THIS IS NOT A LINOP, TO BE DISCUSSED"""
-    def __init__(self, value=1):
-        self.value = value
-        self.in_size = -1
-        self.out_size = -1
         
-    def apply(self, x):
-        return self.value
-    
-    def applyAdjoint(self, x):
-        return 0
-    
 class Flip(BaseLinOp):
     def __init__(self):
         self.in_size = -1
@@ -133,29 +118,22 @@ class Roll(BaseLinOp):
 
     def applyAdjoint(self, x):
         return torch.roll(x, shifts=[-shift for shift in self.shifts], dims=self.dims)
-    
-class StackLinOp(BaseLinOp):
-    def __init__(self, LinOp1, LinOp2):
-        self.LinOp1 = LinOp1
-        self.LinOp2 = LinOp2
-        self.in_size = np.maximum(LinOp1.in_size, LinOp2.in_size)
-        self.out_size = LinOp1.out_size + LinOp2.out_size  # TODO: handle cases where out_size is undefined
+
+class Stack(BaseLinOp):
+    def __init__(self, LinOpList):
+        self.LinOpList = LinOpList
+        self.in_size = max([LinOp.in_size for LinOp in LinOpList])
+        self.out_size = sum([LinOp.out_size if LinOp.out_size != -1 else self.in_size
+            for LinOp in LinOpList])
+        for LinOp in LinOpList:
+            if LinOp.in_size != self.in_size and LinOp.in_size != -1:
+                raise NameError('The input dimensions of the LinOp stack are not consistent.')
 
     def apply(self, x):
-        return torch.cat((self.LinOp1.apply(x), self.LinOp2.apply(x)), dim=0)
+        return torch.cat([LinOp.apply(x) for LinOp in self.LinOpList], dim=0)
 
     def applyAdjoint(self, x):
-        return self.LinOp2.applyAdjoint(x[:self.LinOp2.out_size]) + self.LinOp1.applyAdjoint(x[self.LinOp2.out_size:])
-    
-class Adjoint(BaseLinOp):
-    def __init__(self, LinOp):
-        self.LinOp = LinOp
-        self.in_size = LinOp.out_size
-        self.out_size = LinOp.in_size
-
-    def apply(self, x):
-        return self.LinOp.applyAdjoint(x)
-
-    def applyAdjoint(self, x):
-        return self.LinOp.apply(x)
+        splitted_x = torch.split(x, [LinOp.out_size if LinOp.out_size != -1 else self.in_size
+            for LinOp in self.LinOpList])
+        return sum([LinOp.applyAdjoint(splitted_x[i]) for (i, LinOp) in enumerate(self.LinOpList)])
 
