@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from base import BaseLinOp
+from .base import BaseLinOp
 
 
 class Matrix(BaseLinOp):
@@ -15,7 +15,7 @@ class Matrix(BaseLinOp):
     def applyAdjoint(self, x):
         return self.H.T.conj() @ x
 
-class LinOpMul(BaseLinOp):
+class Multiplication(BaseLinOp):
     """coefs is a vector for element-wise multiplication"""
     def __init__(self, coefs):
         self.coefs = coefs
@@ -28,7 +28,7 @@ class LinOpMul(BaseLinOp):
     def applyAdjoint(self, x):
         return self.coefs.conj() * x
     
-class LinOpConv(BaseLinOp):
+class Conv(BaseLinOp):
     """Convolution operator, computed using FFT"""
     def __init__(self, Ffilter, epsilon=1e-5):
         self.Ffilter = Ffilter  # Filter in the Fourier domain
@@ -42,7 +42,7 @@ class LinOpConv(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.fft.fft2(1 / (self.Ffilter+self.epsilon) * torch.fft.ifft2(x))
 
-class LinOpFFT(BaseLinOp):
+class FFT(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -53,7 +53,7 @@ class LinOpFFT(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.fft.ifft(x, norm="ortho")
 
-class LinOpIFFT(BaseLinOp):
+class IFFT(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -64,7 +64,7 @@ class LinOpIFFT(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.fft.fft(x, norm="ortho")
 
-class LinOpFFT2(BaseLinOp):
+class FFT2(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -75,7 +75,7 @@ class LinOpFFT2(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.fft.ifft2(x, norm="ortho")
 
-class LinOpIFFT2(BaseLinOp):
+class IFFT2(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -86,7 +86,7 @@ class LinOpIFFT2(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.fft.fft2(x, norm="ortho")
     
-class LinOpId(BaseLinOp):
+class Id(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -97,7 +97,7 @@ class LinOpId(BaseLinOp):
     def applyAdjoint(self, x):
         return x
     
-class LinOpConstant(BaseLinOp):
+class Constant(BaseLinOp):
     """WARNING: THIS IS NOT A LINOP, TO BE DISCUSSED"""
     def __init__(self, value=1):
         self.value = value
@@ -110,7 +110,7 @@ class LinOpConstant(BaseLinOp):
     def applyAdjoint(self, x):
         return 0
     
-class LinOpFlip(BaseLinOp):
+class Flip(BaseLinOp):
     def __init__(self):
         self.in_size = -1
         self.out_size = -1
@@ -121,7 +121,7 @@ class LinOpFlip(BaseLinOp):
     def applyAdjoint(self, x):
         return torch.flip(x, dims=[i for i in range(x.dim())])
 
-class LinOpRoll(BaseLinOp):
+class Roll(BaseLinOp):
     def __init__(self, shifts, dims):
         self.in_size = -1
         self.out_size = -1
@@ -132,7 +132,7 @@ class LinOpRoll(BaseLinOp):
         return torch.roll(x, shifts=self.shifts, dims=self.dims)
 
     def applyAdjoint(self, x):
-        return torch.roll(x, shifts=[-shift for shift in self.shifts], dims=self.dims)    
+        return torch.roll(x, shifts=[-shift for shift in self.shifts], dims=self.dims)
     
 class StackLinOp(BaseLinOp):
     def __init__(self, LinOp1, LinOp2):
@@ -146,4 +146,16 @@ class StackLinOp(BaseLinOp):
 
     def applyAdjoint(self, x):
         return self.LinOp2.applyAdjoint(x[:self.LinOp2.out_size]) + self.LinOp1.applyAdjoint(x[self.LinOp2.out_size:])
+    
+class Adjoint(BaseLinOp):
+    def __init__(self, LinOp):
+        self.LinOp = LinOp
+        self.in_size = LinOp.out_size
+        self.out_size = LinOp.in_size
+
+    def apply(self, x):
+        return self.LinOp.applyAdjoint(x)
+
+    def applyAdjoint(self, x):
+        return self.LinOp.apply(x)
 
